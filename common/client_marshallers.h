@@ -74,6 +74,11 @@ typedef struct {
     void (*msgc_port_event)(SpiceMarshaller *m, SpiceMsgcPortEvent *msg);
     void (*msgc_display_preferred_compression)(SpiceMarshaller *m, SpiceMsgcDisplayPreferredCompression *msg);
     void (*msgc_main_power_event_request)(SpiceMarshaller *m, SpiceMsgcMainPowerEventRequest *msg);
+#ifdef FUSIONDATA_DEV
+    /* add by yhoon17, 20180329 : 동영상 가속기 message */
+    void (*msg_display_stream_config)(SpiceMarshaller *m, SpiceMsgDisplayStreamConfig *msg);
+    void (*msg_display_stream_stat_data)(SpiceMarshaller *m, SpiceMsgDisplayStreamStatData *msg);
+#endif
 } SpiceMessageMarshallers;
 
 SpiceMessageMarshallers *spice_message_marshallers_get(void);

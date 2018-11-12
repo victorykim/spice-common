@@ -638,6 +638,31 @@ typedef struct SpiceMsgcMainPowerEventRequest {
     uint32_t event_id;
 } SpiceMsgcMainPowerEventRequest;
 
+
+#ifdef FUSIONDATA_DEV
+/* add by yhoon17, 20180329 : 동영상 가속기 message struct */
+typedef struct SpiceMsgDisplayStreamConfig
+{
+    int32_t nStreamPort;
+    uint32_t unStreamOnMovieDetection;
+    uint32_t unOnVariationCapture;
+    uint32_t unMaxSamplingFps;
+} SpiceMsgDisplayStreamConfig;
+
+typedef struct SpiceMsgDisplayStreamFrameData
+{
+    uint32_t unId;
+    uint32_t unMultiMediaTime;
+    uint32_t unDataSize;
+    uint8_t uszData[0];
+} SpiceMsgDisplayStreamFrameData;
+
+typedef struct SpiceMsgDisplayStreamStatData
+{
+    uint32_t unStreamBacklogSize;
+} SpiceMsgDisplayStreamStatData;
+#endif
+
 SPICE_END_DECLS
 
 #endif /* _H_SPICE_PROTOCOL */
