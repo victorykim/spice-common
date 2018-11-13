@@ -1,6 +1,22 @@
 NULL =
 
-BUILT_SOURCES = $(CLIENT_MARSHALLERS) $(SERVER_MARSHALLERS)
+# Avoid need for python(pyparsing) by end users
+CLIENT_MARSHALLERS =				\
+	generated_client_demarshallers.c	\
+	generated_client_demarshallers1.c	\
+	generated_client_marshallers.c		\
+	generated_client_marshallers1.c		\
+	$(NULL)
+
+SERVER_MARSHALLERS =				\
+	generated_server_demarshallers.c	\
+	generated_server_marshallers.c		\
+	generated_server_marshallers.h		\
+	$(NULL)
+
+BUILT_SOURCES =				\
+	$(CLIENT_MARSHALLERS)	\
+	$(SERVER_MARSHALLERS)	\
 
 noinst_LTLIBRARIES = libspice-common.la libspice-common-server.la libspice-common-client.la
 libspice_common_la_SOURCES =		\
