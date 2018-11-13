@@ -17,6 +17,7 @@ SERVER_MARSHALLERS =				\
 BUILT_SOURCES =				\
 	$(CLIENT_MARSHALLERS)	\
 	$(SERVER_MARSHALLERS)	\
+	$(NULL)
 
 noinst_LTLIBRARIES = libspice-common.la libspice-common-server.la libspice-common-client.la
 libspice_common_la_SOURCES =		\
