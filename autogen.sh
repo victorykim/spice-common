@@ -13,5 +13,5 @@ autoreconf --verbose --force --install
 
 cd "$olddir"
 if [ -z "$NOCONFIGURE" ]; then
-    "$srcdir"/configure --enable-maintainer-mode --enable-python-checks ${1+"$@"}
+    "$srcdir"/configure --enable-maintainer-mode #--enable-python-checks ${1+"$@"}
 fi
