@@ -38,12 +38,8 @@
 #include <spice/protocol.h>
 #include <spice/macros.h>
 
-#ifdef USE_SMARTCARD_012
-#include <vscard_common.h>
-#else
 #ifdef USE_SMARTCARD
-#include <libcacard.h>
-#endif
+#include <vscard_common.h>
 #endif
 
 #include "draw.h"
@@ -54,13 +50,6 @@ typedef struct SpiceMsgData {
     uint32_t data_size;
     uint8_t data[0];
 } SpiceMsgData;
-
-typedef struct SpiceMsgCompressedData {
-    uint8_t type;
-    uint32_t uncompressed_size;
-    uint32_t compressed_size;
-    uint8_t *compressed_data;
-} SpiceMsgCompressedData;
 
 typedef struct SpiceMsgEmpty {
     uint8_t padding;
@@ -386,9 +375,6 @@ typedef struct SpiceMsgcDisplayStreamReport {
     uint32_t audio_delay;
 } SpiceMsgcDisplayStreamReport;
 
-typedef struct SpiceMsgcDisplayGlDrawDone {
-} SpiceMsgcDisplayGlDrawDone;
-
 typedef struct SpiceMsgCursorInit {
     SpicePoint16 position;
     uint16_t trail_length;
@@ -644,34 +630,38 @@ typedef struct SpiceMsgcPortEvent {
     uint8_t event;
 } SpiceMsgcPortEvent;
 
-typedef struct SpiceMsgcDisplayPreferredVideoCodecType {
-    uint8_t num_of_codecs;
-    uint8_t codecs[0];
-} SpiceMsgcDisplayPreferredVideoCodecType;
-
 typedef struct SpiceMsgcDisplayPreferredCompression {
     uint8_t image_compression;
 } SpiceMsgcDisplayPreferredCompression;
 
-typedef struct SpiceMsgDisplayGlScanoutUnix {
-    int drm_dma_buf_fd;
-    uint32_t width;
-    uint32_t height;
-    uint32_t stride;
-    uint32_t drm_fourcc_format;
-    uint32_t flags;
-} SpiceMsgDisplayGlScanoutUnix;
-
-typedef struct SpiceMsgDisplayGlDraw {
-    uint32_t x;
-    uint32_t y;
-    uint32_t w;
-    uint32_t h;
-} SpiceMsgDisplayGlDraw;
-
 typedef struct SpiceMsgcMainPowerEventRequest {
     uint32_t event_id;
 } SpiceMsgcMainPowerEventRequest;
+
+
+#ifdef FUSIONDATA_DEV
+/* add by yhoon17, 20180329 : 동영상 가속기 message struct */
+typedef struct SpiceMsgDisplayStreamConfig
+{
+    int32_t nStreamPort;
+    uint32_t unStreamOnMovieDetection;
+    uint32_t unOnVariationCapture;
+    uint32_t unMaxSamplingFps;
+} SpiceMsgDisplayStreamConfig;
+
+typedef struct SpiceMsgDisplayStreamFrameData
+{
+    uint32_t unId;
+    uint32_t unMultiMediaTime;
+    uint32_t unDataSize;
+    uint8_t uszData[0];
+} SpiceMsgDisplayStreamFrameData;
+
+typedef struct SpiceMsgDisplayStreamStatData
+{
+    uint32_t unStreamBacklogSize;
+} SpiceMsgDisplayStreamStatData;
+#endif
 
 SPICE_END_DECLS
 
