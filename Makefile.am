@@ -1,7 +1,7 @@
 NULL =
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = common
+SUBDIRS = python_modules common
 
 MAINTAINERCLEANFILES =						\
 	$(srcdir)/INSTALL					\
