@@ -63,6 +63,8 @@ int quic_decode(QuicContext *quic, QuicImageType type, uint8_t *buf, int stride)
 QuicContext *quic_create(QuicUsrContext *usr);
 void quic_destroy(QuicContext *quic);
 
+void quic_init(void);
+
 SPICE_END_DECLS
 
 #endif

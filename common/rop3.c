@@ -19,6 +19,8 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
+
 #include "rop3.h"
 #include "spice_common.h"
 
@@ -376,9 +378,15 @@ ROP3_HANDLERS(DPSoo, *src | *pat | *dest, 0xfe);
     rop3_test_handlers_32[index] = rop3_test32_##op;             \
     rop3_test_handlers_16[index] = rop3_test16_##op;
 
-SPICE_CONSTRUCTOR_FUNC(rop3_global_init)
+void rop3_init(void)
 {
+    static int need_init = 1;
     int i;
+
+    if (!need_init) {
+        return;
+    }
+    need_init = 0;
 
     for (i = 0; i < ROP3_NUM_OPS; i++) {
         rop3_with_pattern_handlers_32[i] = default_rop3_with_pattern_handler;

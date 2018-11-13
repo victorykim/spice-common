@@ -294,12 +294,6 @@ typedef struct SpiceCursorHeader {
     uint16_t hot_spot_y;
 } SpiceCursorHeader;
 
-static inline int spice_image_descriptor_is_lossy(const SpiceImageDescriptor *descriptor)
-{
-    return descriptor->type == SPICE_IMAGE_TYPE_JPEG ||
-           descriptor->type == SPICE_IMAGE_TYPE_JPEG_ALPHA;
-}
-
 SPICE_END_DECLS
 
 #endif /* _H_SPICE_DRAW */

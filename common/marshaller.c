@@ -19,58 +19,47 @@
 #include <config.h>
 #endif
 
-#include "log.h"
 #include "marshaller.h"
 #include "mem.h"
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <unistd.h>
-#include <stdio.h>
-
-#include <spice/start-packed.h>
-typedef struct SPICE_ATTR_PACKED {
-    int16_t val;
-} int16_unaligned_t;
-
-typedef struct SPICE_ATTR_PACKED {
-    uint16_t val;
-} uint16_unaligned_t;
-
-typedef struct SPICE_ATTR_PACKED {
-    int32_t val;
-} int32_unaligned_t;
-
-typedef struct SPICE_ATTR_PACKED {
-    uint32_t val;
-} uint32_unaligned_t;
-
-typedef struct SPICE_ATTR_PACKED {
-    int64_t val;
-} int64_unaligned_t;
-
-typedef struct SPICE_ATTR_PACKED {
-    uint64_t val;
-} uint64_unaligned_t;
-#include <spice/end-packed.h>
-
-#define write_int8(ptr,v) (*(int8_t *)(ptr) = v)
-#define write_uint8(ptr,v) (*(uint8_t *)(ptr) = v)
 
 #ifdef WORDS_BIGENDIAN
-#define write_int16(ptr,v) (((uint16_unaligned_t *)(ptr))->val = SPICE_BYTESWAP16((uint16_t)(v)))
-#define write_uint16(ptr,v) (((uint16_unaligned_t *)(ptr))->val = SPICE_BYTESWAP16((uint16_t)(v)))
-#define write_int32(ptr,v) (((uint32_unaligned_t *)(ptr))->val = SPICE_BYTESWAP32((uint32_t)(v)))
-#define write_uint32(ptr,v) (((uint32_unaligned_t *)(ptr))->val = SPICE_BYTESWAP32((uint32_t)(v)))
-#define write_int64(ptr,v) (((uint64_unaligned_t *)(ptr))->val = SPICE_BYTESWAP64((uint64_t)(v)))
-#define write_uint64(ptr,v) (((uint64_unaligned_t *)(ptr))->val = SPICE_BYTESWAP64((uint64_t)(v)))
+#define write_int8(ptr,v) (*((int8_t *)(ptr)) = v)
+#define write_uint8(ptr,v) (*((uint8_t *)(ptr)) = v)
+#define write_int16(ptr,v) (*((int16_t *)(ptr)) = SPICE_BYTESWAP16((uint16_t)(v)))
+#define write_uint16(ptr,v) (*((uint16_t *)(ptr)) = SPICE_BYTESWAP16((uint16_t)(v)))
+#define write_int32(ptr,v) (*((int32_t *)(ptr)) = SPICE_BYTESWAP32((uint32_t)(v)))
+#define write_uint32(ptr,v) (*((uint32_t *)(ptr)) = SPICE_BYTESWAP32((uint32_t)(v)))
+#if defined(__arm__) || defined(_M_ARM)
+// In ARM, there may be problems with unaligned accesses in 64 bit values
+#warning Compiling for big-endian ARM architecture
+#define write_int64(ptr,v) do { *((uint32_t *)(ptr)) = SPICE_BYTESWAP32(*((uint32_t *)(&v) + 1)); \
+    *((uint32_t *)(ptr) + 1) = SPICE_BYTESWAP32(*((uint32_t *)(&v))); } while(0)
+#define write_uint64(ptr,v) write_int64(ptr,v)
 #else
-#define write_int16(ptr,v) (((int16_unaligned_t *)(ptr))->val = v)
-#define write_uint16(ptr,v) (((uint16_unaligned_t *)(ptr))->val = v)
-#define write_int32(ptr,v) (((int32_unaligned_t *)(ptr))->val = v)
-#define write_uint32(ptr,v) (((uint32_unaligned_t *)(ptr))->val = v)
-#define write_int64(ptr,v) (((int64_unaligned_t *)(ptr))->val = v)
-#define write_uint64(ptr,v) (((uint64_unaligned_t *)(ptr))->val = v)
+#define write_int64(ptr,v) (*((int64_t *)(ptr)) = SPICE_BYTESWAP64((uint64_t)(v)))
+#define write_uint64(ptr,v) (*((uint64_t *)(ptr)) = SPICE_BYTESWAP64((uint64_t)(v)))
+#endif
+#else
+#define write_int8(ptr,v) (*((int8_t *)(ptr)) = v)
+#define write_uint8(ptr,v) (*((uint8_t *)(ptr)) = v)
+#define write_int16(ptr,v) (*((int16_t *)(ptr)) = v)
+#define write_uint16(ptr,v) (*((uint16_t *)(ptr)) = v)
+#define write_int32(ptr,v) (*((int32_t *)(ptr)) = v)
+#define write_uint32(ptr,v) (*((uint32_t *)(ptr)) = v)
+#if defined(__arm__) || defined(_M_ARM)
+// In ARM, there may be problems with unaligned accesses in 64 bit values
+#warning Compiling for little-endian ARM architecture
+#define write_int64(ptr,v) do { int64_t tmp = v; \
+    memcpy((char *)ptr, &tmp, sizeof(int64_t)); } while (0)
+#define write_uint64(ptr,v) do { uint64_t tmp = v; \
+    memcpy((char *)ptr, &tmp, sizeof(uint64_t)); } while (0)
+#else
+#define write_int64(ptr,v) (*((int64_t *)(ptr)) = v)
+#define write_uint64(ptr,v) (*((uint64_t *)(ptr)) = v)
+#endif
 #endif
 
 typedef struct {
@@ -108,12 +97,10 @@ struct SpiceMarshaller {
     MarshallerRef pointer_ref;
 
     int n_items;
-    int items_size; /* number of items available in items */
+    int items_size; /* number of items availible in items */
     MarshallerItem *items;
 
     MarshallerItem static_items[N_STATIC_ITEMS];
-    bool has_fd;
-    int fd;
 };
 
 struct SpiceMarshallerData {
@@ -141,8 +128,6 @@ static void spice_marshaller_init(SpiceMarshaller *m,
     m->n_items = 0;
     m->items_size = N_STATIC_ITEMS;
     m->items = m->static_items;
-    m->fd = -1;
-    m->has_fd = false;
 }
 
 SpiceMarshaller *spice_marshaller_new(void)
@@ -342,8 +327,8 @@ void spice_marshaller_unreserve_space(SpiceMarshaller *m, size_t size)
     item->len -= size;
 }
 
-uint8_t *spice_marshaller_add_by_ref_full(SpiceMarshaller *m, uint8_t *data, size_t size,
-                                          spice_marshaller_item_free_func free_data, void *opaque)
+uint8_t *spice_marshaller_add_ref_full(SpiceMarshaller *m, uint8_t *data, size_t size,
+                                       spice_marshaller_item_free_func free_data, void *opaque)
 {
     MarshallerItem *item;
     SpiceMarshallerData *d;
@@ -374,21 +359,18 @@ uint8_t *spice_marshaller_add(SpiceMarshaller *m, const uint8_t *data, size_t si
     return ptr;
 }
 
-uint8_t *spice_marshaller_add_by_ref(SpiceMarshaller *m, const uint8_t *data, size_t size)
+uint8_t *spice_marshaller_add_ref(SpiceMarshaller *m, uint8_t *data, size_t size)
 {
-    /* the cast to no-const here is safe as data is used for writing only if
-     * free_data pointer is not NULL
-     */
-    return spice_marshaller_add_by_ref_full(m, (uint8_t *) data, size, NULL, NULL);
+    return spice_marshaller_add_ref_full(m, data, size, NULL, NULL);
 }
 
-void spice_marshaller_add_chunks_by_ref(SpiceMarshaller *m, SpiceChunks *chunks)
+void spice_marshaller_add_ref_chunks(SpiceMarshaller *m, SpiceChunks *chunks)
 {
     unsigned int i;
 
     for (i = 0; i < chunks->num_chunks; i++) {
-        spice_marshaller_add_by_ref(m, chunks->chunk[i].data,
-                                    chunks->chunk[i].len);
+        spice_marshaller_add_ref(m, chunks->chunk[i].data,
+                                 chunks->chunk[i].len);
     }
 }
 
@@ -454,7 +436,7 @@ uint8_t *spice_marshaller_linearize(SpiceMarshaller *m, size_t skip_bytes,
     /* Only supported for root marshaller */
     assert(m->data->marshallers == m);
 
-    if (m->n_items == 1 && m->next == NULL) {
+    if (m->n_items == 1) {
         *free_res = FALSE;
         if (m->items[0].len <= skip_bytes) {
             *len = 0;
@@ -647,29 +629,4 @@ void *spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v)
     ptr = spice_marshaller_reserve_space(m, sizeof(int8_t));
     write_int8(ptr, v);
     return (void *)ptr;
-}
-
-void spice_marshaller_add_fd(SpiceMarshaller *m, int fd)
-{
-    spice_assert(m->has_fd == false);
-
-    m->has_fd = true;
-    if (fd != -1) {
-        m->fd = dup(fd);
-        if (m->fd == -1) {
-            perror("dup");
-        }
-    } else {
-        m->fd = -1;
-    }
-}
-
-bool spice_marshaller_get_fd(SpiceMarshaller *m, int *fd)
-{
-    bool had_fd = m->has_fd;
-
-    *fd = m->fd;
-    m->has_fd = false;
-
-    return had_fd;
 }

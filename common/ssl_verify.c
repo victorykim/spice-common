@@ -31,12 +31,17 @@
 #endif
 #include <ctype.h>
 #include <string.h>
-#include <gio/gio.h>
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000 || defined (LIBRESSL_VERSION_NUMBER)
-static const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1)
+#ifdef WIN32
+static int inet_aton(const char* ip, struct in_addr* in_addr)
 {
-    return M_ASN1_STRING_data(asn1);
+    unsigned long addr = inet_addr(ip);
+
+    if (addr == INADDR_NONE) {
+        return 0;
+    }
+    in_addr->S_un.S_addr = addr;
+    return 1;
 }
 #endif
 
@@ -156,6 +161,8 @@ static int verify_hostname(X509* cert, const char *hostname)
 {
     GENERAL_NAMES* subject_alt_names;
     int found_dns_name = 0;
+    struct in_addr addr;
+    int addr_len = 0;
     int cn_match = 0;
     X509_NAME* subject;
 
@@ -164,6 +171,11 @@ static int verify_hostname(X509* cert, const char *hostname)
     if (!cert) {
         spice_debug("warning: no cert!");
         return 0;
+    }
+
+    // only IpV4 supported
+    if (inet_aton(hostname, &addr)) {
+        addr_len = sizeof(struct in_addr);
     }
 
     /* try matching against:
@@ -189,49 +201,22 @@ static int verify_hostname(X509* cert, const char *hostname)
             const GENERAL_NAME* name = sk_GENERAL_NAME_value(subject_alt_names, i);
             if (name->type == GEN_DNS) {
                 found_dns_name = 1;
-                if (_gnutls_hostname_compare((const char *)ASN1_STRING_get0_data(name->d.dNSName),
+                if (_gnutls_hostname_compare((char *)ASN1_STRING_data(name->d.dNSName),
                                              ASN1_STRING_length(name->d.dNSName),
                                              hostname)) {
-                    spice_debug("alt name match=%s", ASN1_STRING_get0_data(name->d.dNSName));
+                    spice_debug("alt name match=%s", ASN1_STRING_data(name->d.dNSName));
                     GENERAL_NAMES_free(subject_alt_names);
                     return 1;
                 }
             } else if (name->type == GEN_IPADD) {
-                GInetAddress * ip = NULL;
-                const guint8 * ip_binary = NULL;
-                int alt_ip_len = 0;
-                int ip_len = 0;
-
+                int alt_ip_len = ASN1_STRING_length(name->d.iPAddress);
                 found_dns_name = 1;
-
-                ip = g_inet_address_new_from_string(hostname);
-                if (ip != NULL) {
-                    ip_len = g_inet_address_get_native_size(ip);
-                    ip_binary = g_inet_address_to_bytes(ip);
-                } else {
-                    spice_warning("Could not parse hostname: %s", hostname);
-                }
-
-                alt_ip_len = ASN1_STRING_length(name->d.iPAddress);
-
-                if ((ip_len == alt_ip_len) &&
-                   (memcmp(ASN1_STRING_get0_data(name->d.iPAddress), ip_binary, ip_len)) == 0) {
-                    GInetAddress * alt_ip = NULL;
-                    gchar * alt_ip_string = NULL;
-
-                    alt_ip = g_inet_address_new_from_bytes(ASN1_STRING_get0_data(name->d.iPAddress),
-                                                           g_inet_address_get_family(ip));
-                    alt_ip_string = g_inet_address_to_string(alt_ip);
-                    spice_debug("alt name IP match=%s", alt_ip_string);
-
-                    g_free(alt_ip_string);
-                    g_object_unref(alt_ip);
-                    g_object_unref(ip);
+                if ((addr_len == alt_ip_len)&&
+                    !memcmp(ASN1_STRING_data(name->d.iPAddress), &addr, addr_len)) {
+                    spice_debug("alt name IP match=%s",
+                                inet_ntoa(*((struct in_addr*)ASN1_STRING_data(name->d.dNSName))));
                     GENERAL_NAMES_free(subject_alt_names);
                     return 1;
-                }
-                if (ip != NULL) {
-                    g_object_unref(ip);
                 }
             }
         }
@@ -260,10 +245,10 @@ static int verify_hostname(X509* cert, const char *hostname)
                 continue;
             }
 
-            if (_gnutls_hostname_compare((const char*)ASN1_STRING_get0_data(cn_asn1),
+            if (_gnutls_hostname_compare((char*)ASN1_STRING_data(cn_asn1),
                                          ASN1_STRING_length(cn_asn1),
                                          hostname)) {
-                spice_debug("common name match=%s", (char*)ASN1_STRING_get0_data(cn_asn1));
+                spice_debug("common name match=%s", (char*)ASN1_STRING_data(cn_asn1));
                 cn_match = 1;
                 break;
             }

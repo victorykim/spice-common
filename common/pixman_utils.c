@@ -18,11 +18,14 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include "spice_common.h"
 
 #include "pixman_utils.h"
+#include "spice_common.h"
+#include <spice/macros.h>
 
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include "mem.h"
 
 /*
@@ -1000,13 +1003,25 @@ pixman_image_t *spice_bitmap_try_as_pixman(int src_format,
 
     switch (src_format) {
     case SPICE_BITMAP_FMT_32BIT:
-        pixman_format = PIXMAN_LE_x8r8g8b8;
+#ifdef WORDS_BIGENDIAN
+        pixman_format = PIXMAN_b8g8r8x8;
+#else
+        pixman_format = PIXMAN_x8r8g8b8;
+#endif
         break;
     case SPICE_BITMAP_FMT_RGBA:
-        pixman_format = PIXMAN_LE_a8r8g8b8;
+#ifdef WORDS_BIGENDIAN
+        pixman_format = PIXMAN_b8g8r8a8;
+#else
+        pixman_format = PIXMAN_a8r8g8b8;
+#endif
         break;
     case SPICE_BITMAP_FMT_24BIT:
-        pixman_format = PIXMAN_LE_r8g8b8;
+#ifdef WORDS_BIGENDIAN
+        pixman_format = PIXMAN_b8g8r8;
+#else
+        pixman_format = PIXMAN_r8g8b8;
+#endif
         break;
     case SPICE_BITMAP_FMT_16BIT:
 #ifdef WORDS_BIGENDIAN

@@ -16,18 +16,30 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __MACROS_H
-#define __MACROS_H
+#ifndef _H__GL_CANVAS
+#define _H__GL_CANVAS
 
-#if    __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 5)
-#define SPICE_ATTR_NORETURN                                  \
-    __attribute__((noreturn))
-#define SPICE_ATTR_PRINTF(a,b)                               \
-    __attribute__((format(printf,a,b)))
-#else
-#define SPICE_ATTR_NORETURN
-#define SPICE_ATTR_PRINTF
-#endif /* __GNUC__ */
+#include <spice/macros.h>
 
+#include "glc.h"
+#include "canvas_base.h"
+#include "region.h"
 
-#endif /* __MACROS_H */
+SPICE_BEGIN_DECLS
+
+SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
+                           , SpiceImageCache *bits_cache
+#ifdef SW_CANVAS_CACHE
+                           , SpicePaletteCache *palette_cache
+#endif
+                           , SpiceImageSurfaces *surfaces
+                           , SpiceGlzDecoder *glz_decoder
+                           , SpiceJpegDecoder *jpeg_decoder
+                           , SpiceZlibDecoder *zlib_decoder
+                           );
+void gl_canvas_set_textures_lost(SpiceCanvas *canvas, int textures_lost);
+void gl_canvas_init(void);
+
+SPICE_END_DECLS
+
+#endif

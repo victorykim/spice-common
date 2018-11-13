@@ -16,18 +16,29 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __MACROS_H
-#define __MACROS_H
+#ifndef _H__GDI_CANVAS
+#define _H__GDI_CANVAS
 
-#if    __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 5)
-#define SPICE_ATTR_NORETURN                                  \
-    __attribute__((noreturn))
-#define SPICE_ATTR_PRINTF(a,b)                               \
-    __attribute__((format(printf,a,b)))
-#else
-#define SPICE_ATTR_NORETURN
-#define SPICE_ATTR_PRINTF
-#endif /* __GNUC__ */
+#include <stdint.h>
+#include <spice/macros.h>
 
+#include "pixman_utils.h"
+#include "canvas_base.h"
+#include "region.h"
 
-#endif /* __MACROS_H */
+SPICE_BEGIN_DECLS
+
+SpiceCanvas *gdi_canvas_create(int width, int height,
+                               HDC dc, class RecurciveMutex *lock, uint32_t format,
+                               SpiceImageCache *bits_cache,
+                               SpicePaletteCache *palette_cache,
+                               SpiceImageSurfaces *surfaces,
+                               SpiceGlzDecoder *glz_decoder,
+                               SpiceJpegDecoder *jpeg_decoder,
+                               SpiceZlibDecoder *zlib_decoder);
+
+void gdi_canvas_init(void);
+
+SPICE_END_DECLS
+
+#endif

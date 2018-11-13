@@ -82,11 +82,11 @@ typedef struct QuicFamily {
     unsigned int golomb_code[256][MAXNUMCODES];
 
     /* array for translating distribution U to L for depths up to 8 bpp,
-    initialized by decorrelate_init() */
+    initialized by decorelateinit() */
     BYTE xlatU2L[256];
 
     /* array for translating distribution L to U for depths up to 8 bpp,
-       initialized by correlate_init() */
+       initialized by corelateinit() */
     unsigned int xlatL2U[256];
 } QuicFamily;
 
@@ -103,6 +103,8 @@ typedef struct s_bucket {
 typedef struct Encoder Encoder;
 
 typedef struct CommonState {
+    Encoder *encoder;
+
     unsigned int waitcnt;
     unsigned int tabrand_seed;
     unsigned int wm_trigger;
@@ -133,6 +135,8 @@ typedef struct FamilyStat {
 } FamilyStat;
 
 typedef struct Channel {
+    Encoder *encoder;
+
     int correlate_row_width;
     BYTE *correlate_row;
 
@@ -149,6 +153,7 @@ struct Encoder {
     QuicImageType type;
     unsigned int width;
     unsigned int height;
+    unsigned int num_channels;
 
     unsigned int n_buckets_8bpc;
     unsigned int n_buckets_5bpc;
@@ -167,8 +172,17 @@ struct Encoder {
     CommonState rgb_state;
 };
 
+/* target wait mask index */
+static int wmimax = DEFwmimax;
+
+/* number of symbols to encode before increasing wait mask index */
+static int wminext = DEFwminext;
+
+/* model evolution mode */
+static int evol = DEFevol;
+
 /* bppmask[i] contains i ones as lsb-s */
-static const unsigned int bppmask[33] = {
+static const unsigned long int bppmask[33] = {
     0x00000000, /* [0] */
     0x00000001, 0x00000003, 0x00000007, 0x0000000f,
     0x0000001f, 0x0000003f, 0x0000007f, 0x000000ff,
@@ -180,7 +194,16 @@ static const unsigned int bppmask[33] = {
     0x1fffffff, 0x3fffffff, 0x7fffffff, 0xffffffff /* [32] */
 };
 
-#define bitat(n) (1u<<(n))
+static const unsigned int bitat[32] = {
+    0x00000001, 0x00000002, 0x00000004, 0x00000008,
+    0x00000010, 0x00000020, 0x00000040, 0x00000080,
+    0x00000100, 0x00000200, 0x00000400, 0x00000800,
+    0x00001000, 0x00002000, 0x00004000, 0x00008000,
+    0x00010000, 0x00020000, 0x00040000, 0x00080000,
+    0x00100000, 0x00200000, 0x00400000, 0x00800000,
+    0x01000000, 0x02000000, 0x04000000, 0x08000000,
+    0x10000000, 0x20000000, 0x40000000, 0x80000000 /* [31]*/
+};
 
 
 #define TABRAND_TABSIZE 256
@@ -223,8 +246,8 @@ static const unsigned int tabrand_chaos[TABRAND_TABSIZE] = {
 
 static unsigned int stabrand(void)
 {
-    SPICE_VERIFY( !(TABRAND_SEEDMASK & TABRAND_TABSIZE));
-    SPICE_VERIFY( TABRAND_SEEDMASK + 1 == TABRAND_TABSIZE );
+    //spice_assert( !(TABRAND_SEEDMASK & TABRAND_TABSIZE));
+    //spice_assert( TABRAND_SEEDMASK + 1 == TABRAND_TABSIZE );
 
     return TABRAND_SEEDMASK;
 }
@@ -234,14 +257,14 @@ static unsigned int tabrand(unsigned int *tabrand_seed)
     return tabrand_chaos[++*tabrand_seed & TABRAND_SEEDMASK];
 }
 
-static const unsigned short besttrigtab[3][11] = { /* array of wm_trigger for waitmask and DEFevol,
+static const unsigned short besttrigtab[3][11] = { /* array of wm_trigger for waitmask and evol,
                                                     used by set_wm_trigger() */
     /* 1 */ { 550, 900, 800, 700, 500, 350, 300, 200, 180, 180, 160},
     /* 3 */ { 110, 550, 900, 800, 550, 400, 350, 250, 140, 160, 140},
     /* 5 */ { 100, 120, 550, 900, 700, 500, 400, 300, 220, 250, 160}
 };
 
-/* set wm_trigger knowing waitmask (param) and DEFevol (glob)*/
+/* set wm_trigger knowing waitmask (param) and evol (glob)*/
 static void set_wm_trigger(CommonState *state)
 {
     unsigned int wm = state->wmidx;
@@ -249,9 +272,9 @@ static void set_wm_trigger(CommonState *state)
         wm = 10;
     }
 
-    SPICE_VERIFY(DEFevol < 6);
+    spice_assert(evol < 6);
 
-    state->wm_trigger = besttrigtab[DEFevol / 2][wm];
+    state->wm_trigger = besttrigtab[evol / 2][wm];
 
     spice_assert(state->wm_trigger <= 2000);
     spice_assert(state->wm_trigger >= 1);
@@ -310,7 +333,7 @@ static unsigned int cnt_l_zeroes(const unsigned int bits)
 #include "quic_family_tmpl.c"
 #endif
 
-static void decorrelate_init(QuicFamily *family, int bpc)
+static void decorelate_init(QuicFamily *family, int bpc)
 {
     const unsigned int pixelbitmask = bppmask[bpc];
     const unsigned int pixelbitmaskshr = pixelbitmask >> 1;
@@ -327,9 +350,9 @@ static void decorrelate_init(QuicFamily *family, int bpc)
     }
 }
 
-static void correlate_init(QuicFamily *family, int bpc)
+static void corelate_init(QuicFamily *family, int bpc)
 {
-    const unsigned int pixelbitmask = bppmask[bpc];
+    const unsigned long int pixelbitmask = bppmask[bpc];
     unsigned long int s;
 
     //spice_assert(bpc <= 8);
@@ -348,7 +371,7 @@ static void golomb_coding_slow(QuicFamily *family, const BYTE n, const unsigned 
                                unsigned int * const codewordlen)
 {
     if (n < family->nGRcodewords[l]) {
-        (*codeword) = bitat(l) | (n & bppmask[l]);
+        (*codeword) = bitat[l] | (n & bppmask[l]);
         (*codewordlen) = (n >> l) + l + 1;
     } else {
         (*codeword) = n - family->nGRcodewords[l];
@@ -371,9 +394,9 @@ static void family_init(QuicFamily *family, int bpc, int limit)
         altcodewords = bppmask[bpc] + 1 - (altprefixlen << l);
 
         family->nGRcodewords[l] = (altprefixlen << l);
-        family->notGRsuffixlen[l] = ceil_log_2(altcodewords); /* needed for decoding only */
-        family->notGRcwlen[l] = altprefixlen + family->notGRsuffixlen[l];
+        family->notGRcwlen[l] = altprefixlen + ceil_log_2(altcodewords);
         family->notGRprefixmask[l] = bppmask[32 - altprefixlen]; /* needed for decoding only */
+        family->notGRsuffixlen[l] = ceil_log_2(altcodewords); /* needed for decoding only */
 
         for (b = 0; b < 256; b++) {
             unsigned int code, len;
@@ -383,8 +406,8 @@ static void family_init(QuicFamily *family, int bpc, int limit)
         }
     }
 
-    decorrelate_init(family, bpc);
-    correlate_init(family, bpc);
+    decorelate_init(family, bpc);
+    corelate_init(family, bpc);
 }
 
 static void more_io_words(Encoder *encoder)
@@ -507,7 +530,7 @@ static inline void encode_ones(Encoder *encoder, unsigned int n)
     unsigned int count;
 
     for (count = n >> 5; count; count--) {
-        encode_32(encoder, ~0U);
+        encode(encoder, ~0U, 32);
     }
 
     if ((n &= 0x1f)) {
@@ -517,10 +540,30 @@ static inline void encode_ones(Encoder *encoder, unsigned int n)
 
 #define MELCSTATES 32 /* number of melcode states */
 
-static const int J[MELCSTATES] = {
+static int zeroLUT[256]; /* table to find out number of leading zeros */
+
+static int J[MELCSTATES] = {
     0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7,
     7, 8, 9, 10, 11, 12, 13, 14, 15
 };
+
+/* creates the bit counting look-up table. */
+static void init_zeroLUT(void)
+{
+    int i, j, k, l;
+
+    j = k = 1;
+    l = 8;
+    for (i = 0; i < 256; ++i) {
+        zeroLUT[i] = l;
+        --k;
+        if (k == 0) {
+            k = j;
+            --l;
+            j *= 2;
+        }
+    }
+}
 
 static void encoder_init_rle(CommonState *state)
 {
@@ -602,7 +645,7 @@ static int decode_run(Encoder *encoder)
 
     do {
         register int temp, hits;
-        temp = lzeroes[(BYTE)(~(encoder->io_word >> 24))];/* number of leading ones in the
+        temp = zeroLUT[(BYTE)(~(encoder->io_word >> 24))];/* number of leading ones in the
                                                                       input stream, up to 8 */
         for (hits = 1; hits <= temp; hits++) {
             runlen += encoder->rgb_state.melcorder;
@@ -643,7 +686,7 @@ static int decode_channel_run(Encoder *encoder, Channel *channel)
 
     do {
         register int temp, hits;
-        temp = lzeroes[(BYTE)(~(encoder->io_word >> 24))];/* number of leading ones in the
+        temp = zeroLUT[(BYTE)(~(encoder->io_word >> 24))];/* number of leading ones in the
                                                                       input stream, up to 8 */
         for (hits = 1; hits <= temp; hits++) {
             runlen += channel->state.melcorder;
@@ -727,33 +770,39 @@ static inline void init_decode_io(Encoder *encoder)
     encoder->io_available_bits = 0;
 }
 
-#include <spice/start-packed.h>
+#ifdef __GNUC__
+#define ATTR_PACKED __attribute__ ((__packed__))
+#else
+#define ATTR_PACKED
+#pragma pack(push)
+#pragma pack(1)
+#endif
 
-typedef struct SPICE_ATTR_PACKED one_byte_pixel_t {
+typedef struct ATTR_PACKED one_byte_pixel_t {
     BYTE a;
 } one_byte_t;
 
-typedef struct SPICE_ATTR_PACKED three_bytes_pixel_t {
+typedef struct ATTR_PACKED three_bytes_pixel_t {
     BYTE a;
     BYTE b;
     BYTE c;
 } three_bytes_t;
 
-typedef struct SPICE_ATTR_PACKED four_bytes_pixel_t {
+typedef struct ATTR_PACKED four_bytes_pixel_t {
     BYTE a;
     BYTE b;
     BYTE c;
     BYTE d;
 } four_bytes_t;
 
-typedef struct SPICE_ATTR_PACKED rgb32_pixel_t {
+typedef struct ATTR_PACKED rgb32_pixel_t {
     BYTE b;
     BYTE g;
     BYTE r;
     BYTE pad;
 } rgb32_pixel_t;
 
-typedef struct SPICE_ATTR_PACKED rgb24_pixel_t {
+typedef struct ATTR_PACKED rgb24_pixel_t {
     BYTE b;
     BYTE g;
     BYTE r;
@@ -761,7 +810,11 @@ typedef struct SPICE_ATTR_PACKED rgb24_pixel_t {
 
 typedef uint16_t rgb16_pixel_t;
 
-#include <spice/end-packed.h>
+#ifndef __GNUC__
+#pragma pack(pop)
+#endif
+
+#undef ATTR_PACKED
 
 #define ONE_BYTE
 #include "quic_tmpl.c"
@@ -864,7 +917,7 @@ static void find_model_params(Encoder *encoder,
     /* The only valid values are 1, 3 and 5.
        0, 2 and 4 are obsolete and the rest of the
        values are considered out of the range. */
-    SPICE_VERIFY(DEFevol == 1 || DEFevol == 3 || DEFevol == 5);
+    spice_static_assert (evol == 1 || evol == 3 || evol == 5);
     spice_assert(bpc <= 8 && bpc > 0);
 
     *ncounters = 8;
@@ -873,7 +926,7 @@ static void find_model_params(Encoder *encoder,
 
     *n_buckets_ptrs = 0;  /* ==0 means: not set yet */
 
-    switch (DEFevol) {   /* set repfirst firstsize repnext mulsize */
+    switch (evol) {   /* set repfirst firstsize repnext mulsize */
     case 1: /* buckets contain following numbers of contexts: 1 1 1 2 2 4 4 8 8 ... */
         *repfirst = 3;
         *firstsize = 1;
@@ -893,7 +946,7 @@ static void find_model_params(Encoder *encoder,
         *mulsize = 4;
         break;
     default:
-        encoder->usr->error(encoder->usr, "findmodelparams(): DEFevol out of range!!!\n");
+        encoder->usr->error(encoder->usr, "findmodelparams(): evol out of range!!!\n");
         return;
     }
 
@@ -992,6 +1045,8 @@ static int init_channel(Encoder *encoder, Channel *channel)
     unsigned int n_buckets;
     unsigned int n_buckets_ptrs;
 
+    channel->encoder = encoder;
+    channel->state.encoder = encoder;
     channel->correlate_row_width = 0;
     channel->correlate_row = NULL;
 
@@ -1017,9 +1072,9 @@ static int init_channel(Encoder *encoder, Channel *channel)
     return TRUE;
 }
 
-static void destroy_channel(Encoder *encoder, Channel *channel)
+static void destroy_channel(Channel *channel)
 {
-    QuicUsrContext *usr = encoder->usr;
+    QuicUsrContext *usr = channel->encoder->usr;
     if (channel->correlate_row) {
         usr->free(usr, channel->correlate_row - 1);
     }
@@ -1032,11 +1087,12 @@ static int init_encoder(Encoder *encoder, QuicUsrContext *usr)
     int i;
 
     encoder->usr = usr;
+    encoder->rgb_state.encoder = encoder;
 
     for (i = 0; i < MAX_CHANNELS; i++) {
         if (!init_channel(encoder, &encoder->channels[i])) {
             for (--i; i >= 0; i--) {
-                destroy_channel(encoder, &encoder->channels[i]);
+                destroy_channel(&encoder->channels[i]);
             }
             return FALSE;
         }
@@ -1044,15 +1100,15 @@ static int init_encoder(Encoder *encoder, QuicUsrContext *usr)
     return TRUE;
 }
 
-static int encoder_reset(Encoder *encoder, uint32_t *io_ptr, uint32_t *io_ptr_end)
+static int encoder_reste(Encoder *encoder, uint32_t *io_ptr, uint32_t *io_ptr_end)
 {
-    spice_assert(((uintptr_t)io_ptr % 4) == ((uintptr_t)io_ptr_end % 4));
+    spice_assert(((unsigned long)io_ptr % 4) == ((unsigned long)io_ptr_end % 4));
     spice_assert(io_ptr <= io_ptr_end);
 
     encoder->rgb_state.waitcnt = 0;
     encoder->rgb_state.tabrand_seed = stabrand();
     encoder->rgb_state.wmidx = DEFwmistart;
-    encoder->rgb_state.wmileft = DEFwminext;
+    encoder->rgb_state.wmileft = wminext;
     set_wm_trigger(&encoder->rgb_state);
 
 #if defined(RLE) && defined(RLE_STAT)
@@ -1067,9 +1123,11 @@ static int encoder_reset(Encoder *encoder, uint32_t *io_ptr, uint32_t *io_ptr_en
     return TRUE;
 }
 
-static int encoder_reset_channels(Encoder *encoder, int channels, int width, int bpc)
+static int encoder_reste_channels(Encoder *encoder, int channels, int width, int bpc)
 {
     int i;
+
+    encoder->num_channels = channels;
 
     for (i = 0; i < channels; i++) {
         s_bucket *bucket;
@@ -1114,7 +1172,7 @@ static int encoder_reset_channels(Encoder *encoder, int channels, int width, int
         encoder->channels[i].state.waitcnt = 0;
         encoder->channels[i].state.tabrand_seed = stabrand();
         encoder->channels[i].state.wmidx = DEFwmistart;
-        encoder->channels[i].state.wmileft = DEFwminext;
+        encoder->channels[i].state.wmileft = wminext;
         set_wm_trigger(&encoder->channels[i].state);
 
 #if defined(RLE) && defined(RLE_STAT)
@@ -1214,8 +1272,8 @@ int quic_encode(QuicContext *quic, QuicImageType type, int width, int height,
 
     quic_image_params(encoder, type, &channels, &bpc);
 
-    if (!encoder_reset(encoder, io_ptr, io_ptr_end) ||
-        !encoder_reset_channels(encoder, channels, width, bpc)) {
+    if (!encoder_reste(encoder, io_ptr, io_ptr_end) ||
+        !encoder_reste_channels(encoder, channels, width, bpc)) {
         return QUIC_ERROR;
     }
 
@@ -1350,7 +1408,7 @@ int quic_decode_begin(QuicContext *quic, uint32_t *io_ptr, unsigned int num_io_w
     int channels;
     int bpc;
 
-    if (!encoder_reset(encoder, io_ptr, io_ptr_end)) {
+    if (!encoder_reste(encoder, io_ptr, io_ptr_end)) {
         return QUIC_ERROR;
     }
 
@@ -1381,7 +1439,7 @@ int quic_decode_begin(QuicContext *quic, uint32_t *io_ptr, unsigned int num_io_w
 
     quic_image_params(encoder, type, &channels, &bpc);
 
-    if (!encoder_reset_channels(encoder, channels, width, bpc)) {
+    if (!encoder_reste_channels(encoder, channels, width, bpc)) {
         return QUIC_ERROR;
     }
 
@@ -1605,11 +1663,13 @@ int quic_decode(QuicContext *quic, QuicImageType type, uint8_t *buf, int stride)
     return QUIC_OK;
 }
 
+static int need_init = TRUE;
+
 QuicContext *quic_create(QuicUsrContext *usr)
 {
     Encoder *encoder;
 
-    if (!usr || !usr->error || !usr->warn || !usr->info || !usr->malloc ||
+    if (!usr || need_init || !usr->error || !usr->warn || !usr->info || !usr->malloc ||
         !usr->free || !usr->more_space || !usr->more_lines) {
         return NULL;
     }
@@ -1635,13 +1695,21 @@ void quic_destroy(QuicContext *quic)
     }
 
     for (i = 0; i < MAX_CHANNELS; i++) {
-        destroy_channel(encoder, &encoder->channels[i]);
+        destroy_channel(&encoder->channels[i]);
     }
     encoder->usr->free(encoder->usr, encoder);
 }
 
-SPICE_CONSTRUCTOR_FUNC(quic_global_init)
+void quic_init(void)
 {
+    if (!need_init) {
+        return;
+    }
+    need_init = FALSE;
+
     family_init(&family_8bpc, 8, DEFmaxclen);
     family_init(&family_5bpc, 5, DEFmaxclen);
+#if defined(RLE) && defined(RLE_STAT)
+    init_zeroLUT();
+#endif
 }

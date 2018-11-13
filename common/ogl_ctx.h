@@ -16,18 +16,21 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __MACROS_H
-#define __MACROS_H
+#ifndef _H_GLCTX
+#define _H_GLCTX
 
-#if    __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 5)
-#define SPICE_ATTR_NORETURN                                  \
-    __attribute__((noreturn))
-#define SPICE_ATTR_PRINTF(a,b)                               \
-    __attribute__((format(printf,a,b)))
-#else
-#define SPICE_ATTR_NORETURN
-#define SPICE_ATTR_PRINTF
-#endif /* __GNUC__ */
+#include <spice/macros.h>
 
+SPICE_BEGIN_DECLS
 
-#endif /* __MACROS_H */
+typedef struct OGLCtx OGLCtx;
+
+const char *oglctx_type_str(OGLCtx *ctx);
+void oglctx_make_current(OGLCtx *ctx);
+OGLCtx *pbuf_create(int width, int heigth);
+OGLCtx *pixmap_create(int width, int heigth);
+void oglctx_destroy(OGLCtx *ctx);
+
+SPICE_END_DECLS
+
+#endif

@@ -32,6 +32,8 @@ void do_rop3_with_pattern(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, Sp
 void do_rop3_with_color(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                         uint32_t rgb);
 
+void rop3_init(void);
+
 SPICE_END_DECLS
 
 #endif

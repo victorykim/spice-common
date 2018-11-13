@@ -90,6 +90,7 @@ typedef struct Encoder {
     // (2) a pointer to the first byte in the segment that matches the word
     HashEntry htab[HASH_SIZE];
 
+    uint8_t            *io_start;
     uint8_t            *io_now;
     uint8_t            *io_end;
     size_t io_bytes_count;
@@ -254,6 +255,11 @@ static inline void update_copy_count(Encoder *encoder, uint8_t copy_count)
     *(encoder->io_last_copy) = copy_count;
 }
 
+static inline void encode_level(Encoder *encoder, uint8_t level_code)
+{
+    *(encoder->io_start) |= level_code;
+}
+
 // decrease the io ptr by 1
 static inline void compress_output_prev(Encoder *encoder)
 {
@@ -268,6 +274,7 @@ static int encoder_reset(Encoder *encoder, uint8_t *io_ptr, uint8_t *io_ptr_end)
     spice_return_val_if_fail(io_ptr <= io_ptr_end, FALSE);
 
     encoder->io_bytes_count = io_ptr_end - io_ptr;
+    encoder->io_start = io_ptr;
     encoder->io_now = io_ptr;
     encoder->io_end = io_ptr_end;
     encoder->io_last_copy = NULL;
@@ -375,23 +382,30 @@ void lz_destroy(LzContext *lz)
 #endif
 
 
-#include <spice/start-packed.h>
+#ifdef __GNUC__
+#define ATTR_PACKED __attribute__ ((__packed__))
+#else
+#define ATTR_PACKED
+#pragma pack(push)
+#pragma pack(1)
+#endif
+
 
 /* the palette images will be treated as one byte pixels. Their width should be transformed
    accordingly.
 */
-typedef struct SPICE_ATTR_PACKED one_byte_pixel_t {
+typedef struct ATTR_PACKED one_byte_pixel_t {
     uint8_t a;
 } one_byte_pixel_t;
 
-typedef struct SPICE_ATTR_PACKED rgb32_pixel_t {
+typedef struct ATTR_PACKED rgb32_pixel_t {
     uint8_t b;
     uint8_t g;
     uint8_t r;
     uint8_t pad;
 } rgb32_pixel_t;
 
-typedef struct SPICE_ATTR_PACKED rgb24_pixel_t {
+typedef struct ATTR_PACKED rgb24_pixel_t {
     uint8_t b;
     uint8_t g;
     uint8_t r;
@@ -399,7 +413,11 @@ typedef struct SPICE_ATTR_PACKED rgb24_pixel_t {
 
 typedef uint16_t rgb16_pixel_t;
 
-#include <spice/end-packed.h>
+#ifndef __GNUC__
+#pragma pack(pop)
+#endif
+
+#undef ATTR_PACKED
 
 
 #define MAX_COPY 32
@@ -629,7 +647,6 @@ void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf)
             if (!encoder->palette) {
                 encoder->usr->error(encoder->usr,
                                     "a palette is missing (for bpp to rgb decoding)\n");
-                return;
             }
             switch (encoder->type) {
             case LZ_IMAGE_TYPE_PLT1_BE:

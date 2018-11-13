@@ -19,6 +19,7 @@
 #ifndef _H_RING2
 #define _H_RING2
 
+#include <spice/macros.h>
 #include "spice_common.h"
 
 SPICE_BEGIN_DECLS
@@ -70,34 +71,45 @@ static inline void ring_add_before(RingItem *item, RingItem *pos)
     ring_add(pos->prev, item);
 }
 
+static inline void __ring_remove(RingItem *item)
+{
+    item->next->prev = item->prev;
+    item->prev->next = item->next;
+    item->prev = item->next = 0;
+}
+
 static inline void ring_remove(RingItem *item)
 {
     spice_assert(item->next != NULL && item->prev != NULL);
     spice_assert(item->next != item);
 
-    item->next->prev = item->prev;
-    item->prev->next = item->next;
-    item->prev = item->next = NULL;
+    __ring_remove(item);
 }
 
 static inline RingItem *ring_get_head(Ring *ring)
 {
+    RingItem *ret;
+
     spice_assert(ring->next != NULL && ring->prev != NULL);
 
     if (ring_is_empty(ring)) {
         return NULL;
     }
-    return ring->next;
+    ret = ring->next;
+    return ret;
 }
 
 static inline RingItem *ring_get_tail(Ring *ring)
 {
+    RingItem *ret;
+
     spice_assert(ring->next != NULL && ring->prev != NULL);
 
     if (ring_is_empty(ring)) {
         return NULL;
     }
-    return ring->prev;
+    ret = ring->prev;
+    return ret;
 }
 
 static inline RingItem *ring_next(Ring *ring, RingItem *pos)
@@ -144,7 +156,9 @@ static inline unsigned int ring_get_length(Ring *ring)
     RingItem *i;
     unsigned int ret = 0;
 
-    RING_FOREACH(i, ring)
+    for (i = ring_get_head(ring);
+         i != NULL;
+         i = ring_next(ring, i))
         ret++;
 
     return ret;
