@@ -17,7 +17,6 @@ AM_INIT_AUTOMAKE([1.11 dist-xz no-dist-gzip tar-ustar foreign -Wall -Werror])
 AM_MAINTAINER_MODE
 AM_SILENT_RULES([yes])
 LT_INIT
-SPICE_MANUAL
 
 AC_PROG_CC
 AC_PROG_CC_C99
@@ -28,29 +27,19 @@ AM_PROG_CC_C_O
 
 SPICE_CHECK_SYSDEPS
 
-AC_ARG_ENABLE([alignment-checks],
-  AS_HELP_STRING([--enable-alignment-checks],
-                 [Enable runtime checks for cast alignment @<:@default=no@:>@]),
-  [],
-  enable_alignment_checks="no")
-AS_IF([test "x$enable_alignment_checks" = "xyes"],
-      [AC_DEFINE([SPICE_DEBUG_ALIGNMENT], 1, [Enable runtime checks for cast alignment])])
-
 # Checks for libraries
-PKG_CHECK_MODULES([PROTOCOL], [spice-protocol >= 0.12.12])
+PKG_CHECK_MODULES([PROTOCOL], [spice-protocol >= 0.12.10])
+CODE_GENERATOR_BASEDIR=`pkg-config --variable=codegendir spice-protocol`
+AC_SUBST([CODE_GENERATOR_BASEDIR])
 
 SPICE_CHECK_PYTHON_MODULES()
 
-SPICE_CHECK_PIXMAN
-SPICE_CHECK_SMARTCARD
-SPICE_CHECK_CELT051
-SPICE_CHECK_GLIB2
-SPICE_CHECK_OPUS
-SPICE_CHECK_OPENSSL
-
-SPICE_COMMON_CFLAGS='$(PIXMAN_CFLAGS) $(SMARTCARD_CFLAGS) $(CELT051_CFLAGS) $(GLIB2_CFLAGS) $(OPUS_CFLAGS) $(OPENSSL_CFLAGS)'
-SPICE_COMMON_CFLAGS="$SPICE_COMMON_CFLAGS -DG_LOG_DOMAIN=\\\"Spice\\\""
-SPICE_COMMON_LIBS='$(PIXMAN_LIBS) $(CELT051_LIBS) $(GLIB2_LIBS) $(OPUS_LIBS) $(OPENSSL_LIBS)'
+SPICE_CHECK_PIXMAN(SPICE_COMMON)
+SPICE_CHECK_SMARTCARD(SPICE_COMMON)
+SPICE_CHECK_CELT051(SPICE_COMMON)
+SPICE_CHECK_GLIB2(SPICE_COMMON)
+SPICE_CHECK_OPUS(SPICE_COMMON)
+SPICE_CHECK_OPENGL(SPICE_COMMON)
 AC_SUBST(SPICE_COMMON_CFLAGS)
 AC_SUBST(SPICE_COMMON_LIBS)
 
@@ -58,9 +47,6 @@ AC_SUBST(SPICE_COMMON_LIBS)
 AC_CONFIG_FILES([
   Makefile
   common/Makefile
-  python_modules/Makefile
-  tests/Makefile
-  docs/Makefile
 ])
 
 AH_BOTTOM([
