@@ -21,13 +21,6 @@ BUILT_SOURCES =				\
 
 noinst_LTLIBRARIES = libspice-common.la libspice-common-server.la libspice-common-client.la
 libspice_common_la_SOURCES =		\
-	generated_client_demarshallers.c	\
-	generated_client_demarshallers1.c	\
-	generated_client_marshallers.c		\
-	generated_client_marshallers1.c		\
-	generated_server_demarshallers.c	\
-	generated_server_marshallers.c		\
-	generated_server_marshallers.h		\
 	backtrace.c			\
 	backtrace.h			\
 	bitops.h			\
